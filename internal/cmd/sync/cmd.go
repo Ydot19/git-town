@@ -43,6 +43,7 @@ When run on a feature branch:
 - pulls updates for the current branch
 - merges the parent branch into the current branch
 - pushes the current branch
+- updates proposal(s)
 
 When run on the main branch or a perennial branch:
 - pulls and pushes updates for the current branch
@@ -60,6 +61,7 @@ func Cmd() *cobra.Command {
 	addPruneFlag, readPruneFlag := flags.Prune()
 	addStackFlag, readStackFlag := flags.Stack("sync the stack that the current branch belongs to")
 	addVerboseFlag, readVerboseFlag := flags.Verbose()
+	addProposalFlag, readProposalFlag := flags.Proposal("sync lineage information to proposal")
 	cmd := cobra.Command{
 		Use:     syncCommand,
 		GroupID: cmdhelpers.GroupIDBasic,
@@ -101,6 +103,7 @@ func Cmd() *cobra.Command {
 	addPruneFlag(&cmd)
 	addStackFlag(&cmd)
 	addVerboseFlag(&cmd)
+	addProposalFlag(&cmd)
 	return &cmd
 }
 
@@ -162,6 +165,14 @@ func executeSync(args executeSyncArgs) error {
 	if data.remotes.HasRemote(data.config.NormalConfig.DevRemote) && data.shouldPushTags && data.config.NormalConfig.Offline.IsOnline() {
 		runProgram.Value.Add(&opcodes.PushTags{})
 	}
+
+	if proposal {
+		runProgram.Value.Add(&opcodes.ProposalLineageCreate{
+			Branch:            data.initialBranch,
+			ProposalLineageIn: configdomain.ProposalLineageOperationInProposalBody,
+		})
+	}
+
 	cmdhelpers.Wrap(runProgram, cmdhelpers.WrapOptions{
 		DryRun:                   data.config.NormalConfig.DryRun,
 		InitialStashSize:         data.stashSize,
@@ -210,6 +221,7 @@ type syncData struct {
 	branchesSnapshot         gitdomain.BranchesSnapshot
 	branchesToSync           configdomain.BranchesToSync
 	config                   config.ValidatedConfig
+	connector                Option[forgedomain.Connector]
 	detached                 configdomain.Detached
 	hasOpenChanges           bool
 	initialBranch            gitdomain.LocalBranchName
@@ -383,6 +395,7 @@ func determineSyncData(repo execute.OpenRepoResult, args determineSyncDataArgs) 
 		branchesSnapshot:         branchesSnapshot,
 		branchesToSync:           branchesToSync,
 		config:                   validatedConfig,
+		connector:                connector,
 		detached:                 args.detached,
 		hasOpenChanges:           repoStatus.OpenChanges,
 		initialBranch:            initialBranch,
