@@ -217,6 +217,7 @@ Please upgrade to the new format: create.new-branch-type = "prototype"`
 	PerennialRegexResult                  = "Perennial regex: %s\n"
 	PreviousCommandFinished               = "The previous Git Town command (%s) finished successfully.\n"
 	PreviousCommandProblem                = "The last Git Town command (%s) hit a problem %v ago.\n"
+	ProposalLineageUnsupportedForBranchType = "Proposal stack lineage unsupported for branch type %s"
 	ProposalMultipleFromFound             = "found %d proposals for branch %q"
 	ProposalMultipleFromToFound           = "found %d proposals from branch %q to branch %q"
 	ProposalNoNumberGiven                 = "no proposal number given"
