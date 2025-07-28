@@ -70,10 +70,6 @@ func (self Connector) UpdateProposalTargetFn() Option[func(forgedomain.ProposalI
 	return Some(self.updateProposalTarget)
 }
 
-func (self Connector) UpdateProposalBodyFn() Option[func(forgedomain.ProposalInterface, string) error] {
-	return Some(self.updateProposalBody)
-}
-
 func (self Connector) VerifyConnection() forgedomain.VerifyConnectionResult {
 	output, err := self.Backend.Query("glab", "auth", "status")
 	if err != nil {
@@ -116,6 +112,10 @@ func (self Connector) updateProposalTarget(proposalData forgedomain.ProposalInte
 
 func (self Connector) updateProposalBody(proposalData forgedomain.ProposalInterface, updatedDescription string) error {
 	return self.Frontend.Run("glab", "mr", "update", strconv.Itoa(proposalData.Data().Number), "--description="+updatedDescription)
+}
+
+func (self Connector) updateProposalTarget(proposalData forgedomain.ProposalInterface, target gitdomain.LocalBranchName) error {
+	return self.Frontend.Run("glab", "edit", strconv.Itoa(proposalData.Data().Number), "--base="+target.String())
 }
 
 func ParsePermissionsOutput(output string) forgedomain.VerifyConnectionResult {
