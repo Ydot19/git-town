@@ -14,12 +14,12 @@ type proposalStackLineageBuildOptions struct {
 	location               ProposalLineageIn
 }
 
-type configureProposalStackLineage func(opts *proposalStackLineageBuildOptions)
+type ConfigureProposalStackLineage func(opts *proposalStackLineageBuildOptions)
 
 // WithCurrentBranch
 // Informs the builder which branch is the current. This is used to determine when the
 // `WithCurrentBranchIndicator` character appears.
-func WithCurrentBranch(branch gitdomain.LocalBranchName) configureProposalStackLineage {
+func WithCurrentBranch(branch gitdomain.LocalBranchName) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.currentBranch = Some(branch)
 	}
@@ -27,7 +27,7 @@ func WithCurrentBranch(branch gitdomain.LocalBranchName) configureProposalStackL
 
 // WithCurrentBranchIndicator
 // Special character used to denote the current branch's proposal (if there is one).
-func WithCurrentBranchIndicator(indicator string) configureProposalStackLineage {
+func WithCurrentBranchIndicator(indicator string) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.currentBranchIndicator = indicator
 	}
@@ -35,7 +35,7 @@ func WithCurrentBranchIndicator(indicator string) configureProposalStackLineage 
 
 // WithIndentMarker
 // Controls the marker following an indent.
-func WithIndentMarker(marker string) configureProposalStackLineage {
+func WithIndentMarker(marker string) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.indentMarker = marker
 	}
@@ -43,7 +43,7 @@ func WithIndentMarker(marker string) configureProposalStackLineage {
 
 // WithProposalLineageIn
 // Determines the context the proposal stack lineage is displayed.
-func WithProposalLineageIn(location ProposalLineageIn) configureProposalStackLineage {
+func WithProposalLineageIn(location ProposalLineageIn) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.location = location
 	}
@@ -52,7 +52,7 @@ func WithProposalLineageIn(location ProposalLineageIn) configureProposalStackLin
 // WithStringAfterStackDisplay
 // A set of texts to appear after the main stack information is displayed.
 // If this method is called more than once, the text appear in FIFO order.
-func WithStringAfterStackDisplay(text string) configureProposalStackLineage {
+func WithStringAfterStackDisplay(text string) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.afterStackDisplay = append(opts.afterStackDisplay, text)
 	}
@@ -61,7 +61,7 @@ func WithStringAfterStackDisplay(text string) configureProposalStackLineage {
 // WithStringBeforeStackDisplay
 // A set of texts to appear before the main stack information is displayed.
 // If this method is called more than once, the text appear in FIFO order.
-func WithStringBeforeStackDisplay(text string) configureProposalStackLineage {
+func WithStringBeforeStackDisplay(text string) ConfigureProposalStackLineage {
 	return func(opts *proposalStackLineageBuildOptions) {
 		opts.beforeStackDisplay = append(opts.beforeStackDisplay, text)
 	}

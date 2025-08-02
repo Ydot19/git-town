@@ -166,7 +166,7 @@ func executeSync(args executeSyncArgs) error {
 		runProgram.Value.Add(&opcodes.PushTags{})
 	}
 
-	if proposal {
+	if proposal.IsTrue() {
 		runProgram.Value.Add(&opcodes.ProposalLineageCreate{
 			Branch:            data.initialBranch,
 			ProposalLineageIn: configdomain.ProposalLineageOperationInProposalBody,
