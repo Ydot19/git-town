@@ -60,20 +60,28 @@ func Cmd() *cobra.Command {
 		Short: shipDesc,
 		Long:  cmdhelpers.Long(shipDesc, fmt.Sprintf(shipHelp, configdomain.KeyGitHubToken)),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dryRun, err1 := readDryRunFlag(cmd)
-			message, err2 := readMessageFlag(cmd)
-			messageFile, err3 := readMessageFileFlag(cmd)
-			shipStrategyOverride, err4 := readShipStrategyFlag(cmd)
-			toParent, err5 := readToParentFlag(cmd)
-			verbose, err6 := readVerboseFlag(cmd)
-			if err := cmp.Or(err1, err2, err3, err4, err5, err6); err != nil {
+			dryRun, errDryRun := readDryRunFlag(cmd)
+			message, errMessage := readMessageFlag(cmd)
+			messageFile, errMessageFile := readMessageFileFlag(cmd)
+			shipStrategy, errShipStrategy := readShipStrategyFlag(cmd)
+			toParent, errToParent := readToParentFlag(cmd)
+			verbose, errVerbose := readVerboseFlag(cmd)
+			if err := cmp.Or(errDryRun, errMessage, errMessageFile, errShipStrategy, errToParent, errVerbose); err != nil {
 				return err
 			}
-			cliConfig := cliconfig.CliConfig{
-				DryRun:  dryRun,
-				Verbose: verbose,
-			}
-			return executeShip(args, cliConfig, message, messageFile, shipStrategyOverride, toParent)
+			cliConfig := cliconfig.New(cliconfig.NewArgs{
+				AutoResolve: None[configdomain.AutoResolve](),
+				DryRun:      dryRun,
+				Verbose:     verbose,
+			})
+			return executeShip(executeShipArgs{
+				args:         args,
+				cliConfig:    cliConfig,
+				message:      message,
+				messageFile:  messageFile,
+				shipStrategy: shipStrategy,
+				toParent:     toParent,
+			})
 		},
 	}
 	addMessageFileFlag(&cmd)
@@ -85,9 +93,18 @@ func Cmd() *cobra.Command {
 	return &cmd
 }
 
-func executeShip(args []string, cliConfig cliconfig.CliConfig, messageOpt Option[gitdomain.CommitMessage], messageFileOpt Option[gitdomain.CommitMessageFile], shipStrategy Option[configdomain.ShipStrategy], toParent configdomain.ShipIntoNonperennialParent) error {
+type executeShipArgs struct {
+	args         []string
+	cliConfig    configdomain.PartialConfig
+	message      Option[gitdomain.CommitMessage]
+	messageFile  Option[gitdomain.CommitMessageFile]
+	shipStrategy Option[configdomain.ShipStrategy]
+	toParent     configdomain.ShipIntoNonperennialParent
+}
+
+func executeShip(args executeShipArgs) error {
 	repo, err := execute.OpenRepo(execute.OpenRepoArgs{
-		CliConfig:        cliConfig,
+		CliConfig:        args.cliConfig,
 		PrintBranchNames: true,
 		PrintCommands:    true,
 		ValidateGitRepo:  true,
@@ -96,15 +113,15 @@ func executeShip(args []string, cliConfig cliconfig.CliConfig, messageOpt Option
 	if err != nil {
 		return err
 	}
-	sharedData, exit, err := determineSharedShipData(args, repo, cliConfig, shipStrategy)
+	sharedData, exit, err := determineSharedShipData(args.args, repo, args.shipStrategy)
 	if err != nil || exit {
 		return err
 	}
-	message, err := ReadFile(messageOpt, messageFileOpt)
+	message, err := ReadFile(args.message, args.messageFile)
 	if err != nil {
 		return err
 	}
-	if err = validateSharedData(sharedData, toParent, message); err != nil {
+	if err = validateSharedData(sharedData, args.toParent, message); err != nil {
 		return err
 	}
 	prog := NewMutable(&program.Program{})
@@ -122,7 +139,12 @@ func executeShip(args []string, cliConfig cliconfig.CliConfig, messageOpt Option
 		if err != nil {
 			return err
 		}
-		shipProgramAlwaysMerge(prog, repo, sharedData, mergeData, message)
+		shipProgramAlwaysMerge(repo, shipProgramAlwaysMergeArgs{
+			commitMessage: message,
+			mergeData:     mergeData,
+			prog:          prog,
+			sharedData:    sharedData,
+		})
 	case configdomain.ShipStrategyFastForward:
 		mergeData, err := determineMergeData(repo, sharedData.branchNameToShip, sharedData.targetBranchName)
 		if err != nil {
@@ -142,7 +164,7 @@ func executeShip(args []string, cliConfig cliconfig.CliConfig, messageOpt Option
 		BeginConfigSnapshot:   repo.ConfigSnapshot,
 		BeginStashSize:        sharedData.stashSize,
 		Command:               shipCommand,
-		DryRun:                cliConfig.DryRun,
+		DryRun:                sharedData.config.NormalConfig.DryRun,
 		EndBranchesSnapshot:   None[gitdomain.BranchesSnapshot](),
 		EndConfigSnapshot:     None[undoconfig.ConfigSnapshot](),
 		EndStashSize:          None[gitdomain.StashSize](),
@@ -169,7 +191,6 @@ func executeShip(args []string, cliConfig cliconfig.CliConfig, messageOpt Option
 		PendingCommand:          None[string](),
 		RootDir:                 repo.RootDir,
 		RunState:                runState,
-		Verbose:                 cliConfig.Verbose,
 	})
 }
 

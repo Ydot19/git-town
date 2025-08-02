@@ -46,6 +46,7 @@ func TestSave(t *testing.T) {
 		t.Run("all options given", func(t *testing.T) {
 			t.Parallel()
 			have := configfile.RenderTOML(configdomain.PartialConfig{
+				AutoResolve:              Some(configdomain.AutoResolve(false)),
 				DevRemote:                Some(gitdomain.RemoteOrigin),
 				ForgeType:                asserts.NoError1(forgedomain.ParseForgeType("github")),
 				HostingOriginHostname:    configdomain.ParseHostingOriginHostname("forge"),
@@ -53,6 +54,7 @@ func TestSave(t *testing.T) {
 				NewBranchType:            Some(configdomain.NewBranchType(configdomain.BranchTypePrototypeBranch)),
 				PerennialBranches:        gitdomain.NewLocalBranchNames("qa", "staging"),
 				PerennialRegex:           asserts.NoError1(configdomain.ParsePerennialRegex("perennial-")),
+				ProposalsShowLineage:     Some(configdomain.ProposalsShowLineageCLI),
 				PushHook:                 Some(configdomain.PushHook(true)),
 				ShareNewBranches:         Some(configdomain.ShareNewBranchesPropose),
 				ShipDeleteTrackingBranch: Some(configdomain.ShipDeleteTrackingBranch(true)),
@@ -80,11 +82,15 @@ dev-remote = "origin"
 forge-type = "github"
 origin-hostname = "forge"
 
+[propose]
+lineage = "cli"
+
 [ship]
 delete-tracking-branch = true
 strategy = "api"
 
 [sync]
+auto-resolve = false
 feature-strategy = "merge"
 perennial-strategy = "rebase"
 prototype-strategy = "compress"

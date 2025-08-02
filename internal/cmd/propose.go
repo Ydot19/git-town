@@ -59,6 +59,7 @@ func proposeCommand() *cobra.Command {
 	addBodyFlag, readBodyFlag := flags.ProposalBody("b")
 	addBodyFileFlag, readBodyFileFlag := flags.ProposalBodyFile()
 	addDryRunFlag, readDryRunFlag := flags.DryRun()
+	addAutoResolveFlag, readAutoResolveFlag := flags.AutoResolve()
 	addStackFlag, readStackFlag := flags.Stack("propose the entire stack")
 	addTitleFlag, readTitleFlag := flags.ProposalTitle()
 	addVerboseFlag, readVerboseFlag := flags.Verbose()
@@ -69,34 +70,51 @@ func proposeCommand() *cobra.Command {
 		Short:   proposeDesc,
 		Long:    cmdhelpers.Long(proposeDesc, fmt.Sprintf(proposeHelp, configdomain.KeyForgeType, configdomain.KeyHostingOriginHostname)),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			bodyFile, err1 := readBodyFileFlag(cmd)
-			bodyText, err2 := readBodyFlag(cmd)
-			dryRun, err3 := readDryRunFlag(cmd)
-			stack, err4 := readStackFlag(cmd)
-			title, err5 := readTitleFlag(cmd)
-			verbose, err6 := readVerboseFlag(cmd)
-			if err := cmp.Or(err1, err2, err3, err4, err5, err6); err != nil {
+			bodyFile, errBodyFile := readBodyFileFlag(cmd)
+			bodyText, errBodyText := readBodyFlag(cmd)
+			dryRun, errDryRun := readDryRunFlag(cmd)
+			autoResolve, errAutoResolve := readAutoResolveFlag(cmd)
+			stack, errStack := readStackFlag(cmd)
+			title, errTitle := readTitleFlag(cmd)
+			verbose, errVerbose := readVerboseFlag(cmd)
+			if err := cmp.Or(errBodyFile, errBodyText, errDryRun, errAutoResolve, errStack, errTitle, errVerbose); err != nil {
 				return err
 			}
-			cliConfig := cliconfig.CliConfig{
-				DryRun:  dryRun,
-				Verbose: verbose,
-			}
-			return executePropose(cliConfig, title, bodyText, bodyFile, stack)
+			cliConfig := cliconfig.New(cliconfig.NewArgs{
+				AutoResolve: autoResolve,
+				DryRun:      dryRun,
+				Verbose:     verbose,
+			})
+			return executePropose(proposeArgs{
+				body:      bodyText,
+				bodyFile:  bodyFile,
+				cliConfig: cliConfig,
+				stack:     stack,
+				title:     title,
+			})
 		},
 	}
 	addBodyFlag(&cmd)
 	addBodyFileFlag(&cmd)
 	addDryRunFlag(&cmd)
+	addAutoResolveFlag(&cmd)
 	addStackFlag(&cmd)
 	addTitleFlag(&cmd)
 	addVerboseFlag(&cmd)
 	return &cmd
 }
 
-func executePropose(cliConfig cliconfig.CliConfig, title Option[gitdomain.ProposalTitle], body Option[gitdomain.ProposalBody], bodyFile Option[gitdomain.ProposalBodyFile], fullStack configdomain.FullStack) error {
+type proposeArgs struct {
+	body      Option[gitdomain.ProposalBody]
+	bodyFile  Option[gitdomain.ProposalBodyFile]
+	cliConfig configdomain.PartialConfig
+	stack     configdomain.FullStack
+	title     Option[gitdomain.ProposalTitle]
+}
+
+func executePropose(args proposeArgs) error {
 	repo, err := execute.OpenRepo(execute.OpenRepoArgs{
-		CliConfig:        cliConfig,
+		CliConfig:        args.cliConfig,
 		PrintBranchNames: true,
 		PrintCommands:    true,
 		ValidateGitRepo:  true,
@@ -105,7 +123,7 @@ func executePropose(cliConfig cliconfig.CliConfig, title Option[gitdomain.Propos
 	if err != nil {
 		return err
 	}
-	data, exit, err := determineProposeData(repo, cliConfig, fullStack, title, body, bodyFile)
+	data, exit, err := determineProposeData(repo, args)
 	if err != nil || exit {
 		return err
 	}
@@ -116,7 +134,7 @@ func executePropose(cliConfig cliconfig.CliConfig, title Option[gitdomain.Propos
 		BeginStashSize:        data.stashSize,
 		BranchInfosLastRun:    data.branchInfosLastRun,
 		Command:               proposeCmd,
-		DryRun:                cliConfig.DryRun,
+		DryRun:                data.config.NormalConfig.DryRun,
 		EndBranchesSnapshot:   None[gitdomain.BranchesSnapshot](),
 		EndConfigSnapshot:     None[undoconfig.ConfigSnapshot](),
 		EndStashSize:          None[gitdomain.StashSize](),
@@ -142,7 +160,6 @@ func executePropose(cliConfig cliconfig.CliConfig, title Option[gitdomain.Propos
 		PendingCommand:          None[string](),
 		RootDir:                 repo.RootDir,
 		RunState:                runState,
-		Verbose:                 cliConfig.Verbose,
 	})
 }
 
@@ -173,7 +190,7 @@ type branchToProposeData struct {
 	syncStatus          gitdomain.SyncStatus
 }
 
-func determineProposeData(repo execute.OpenRepoResult, cliConfig cliconfig.CliConfig, fullStack configdomain.FullStack, title Option[gitdomain.ProposalTitle], body Option[gitdomain.ProposalBody], bodyFileOpt Option[gitdomain.ProposalBodyFile]) (data proposeData, exit dialogdomain.Exit, err error) {
+func determineProposeData(repo execute.OpenRepoResult, args proposeArgs) (data proposeData, exit dialogdomain.Exit, err error) {
 	preFetchBranchSnapshot, err := repo.Git.BranchesSnapshot(repo.Backend)
 	if err != nil {
 		return data, false, err
@@ -219,7 +236,6 @@ func determineProposeData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCo
 		RootDir:               repo.RootDir,
 		UnvalidatedConfig:     repo.UnvalidatedConfig,
 		ValidateNoOpenChanges: false,
-		Verbose:               cliConfig.Verbose,
 	})
 	if err != nil || exit {
 		return data, exit, err
@@ -256,7 +272,7 @@ func determineProposeData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCo
 	perennialAndMain := branchesAndTypes.BranchesOfTypes(configdomain.BranchTypePerennialBranch, configdomain.BranchTypeMainBranch)
 	var branchNamesToPropose gitdomain.LocalBranchNames
 	var branchNamesToSync gitdomain.LocalBranchNames
-	if fullStack {
+	if args.stack {
 		branchNamesToSync = validatedConfig.NormalConfig.Lineage.BranchLineageWithoutRoot(initialBranch, perennialAndMain)
 		branchNamesToPropose = make(gitdomain.LocalBranchNames, len(branchNamesToSync))
 		copy(branchNamesToPropose, branchNamesToSync)
@@ -309,7 +325,7 @@ func determineProposeData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCo
 	if err != nil {
 		return data, false, err
 	}
-	bodyText, err := ship.ReadFile(body, bodyFileOpt)
+	bodyText, err := ship.ReadFile(args.body, args.bodyFile)
 	return proposeData{
 		branchInfos:         branchesSnapshot.Branches,
 		branchInfosLastRun:  branchInfosLastRun,
@@ -325,7 +341,7 @@ func determineProposeData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCo
 		preFetchBranchInfos: preFetchBranchSnapshot.Branches,
 		previousBranch:      previousBranch,
 		proposalBody:        bodyText,
-		proposalTitle:       title,
+		proposalTitle:       args.title,
 		remotes:             remotes,
 		stashSize:           stashSize,
 	}, false, err

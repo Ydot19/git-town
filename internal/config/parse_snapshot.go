@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/git-town/git-town/v21/internal/cli/colors"
 	"github.com/git-town/git-town/v21/internal/config/configdomain"
 	"github.com/git-town/git-town/v21/internal/config/gitconfig"
 	"github.com/git-town/git-town/v21/internal/forge/forgedomain"
 	"github.com/git-town/git-town/v21/internal/git/gitdomain"
 	"github.com/git-town/git-town/v21/internal/messages"
 	"github.com/git-town/git-town/v21/internal/subshell/subshelldomain"
+	"github.com/git-town/git-town/v21/pkg/colors"
 	. "github.com/git-town/git-town/v21/pkg/prelude"
 )
 
@@ -73,31 +73,34 @@ func NewLineageFromSnapshot(snapshot configdomain.SingleSnapshot, updateOutdated
 
 func NewPartialConfigFromSnapshot(snapshot configdomain.SingleSnapshot, updateOutdated bool, runner subshelldomain.Runner) (configdomain.PartialConfig, error) {
 	aliases := snapshot.Aliases()
-	branchTypeOverrides, err1 := NewBranchTypeOverridesInSnapshot(snapshot, runner)
-	contributionRegex, err2 := configdomain.ParseContributionRegex(snapshot[configdomain.KeyContributionRegex])
-	featureRegex, err3 := configdomain.ParseFeatureRegex(snapshot[configdomain.KeyFeatureRegex])
-	forgeType, err4 := forgedomain.ParseForgeType(snapshot[configdomain.KeyForgeType])
-	githubConnectorType, err5 := forgedomain.ParseGitHubConnectorType(snapshot[configdomain.KeyGitHubConnectorType])
-	gitlabConnectorType, err6 := forgedomain.ParseGitLabConnectorType(snapshot[configdomain.KeyGitLabConnectorType])
-	lineage, err7 := NewLineageFromSnapshot(snapshot, updateOutdated, runner)
-	branchType, err8 := configdomain.ParseBranchType(snapshot[configdomain.KeyNewBranchType])
-	newBranchType := configdomain.NewBranchTypeOpt(branchType)
-	observedRegex, err9 := configdomain.ParseObservedRegex(snapshot[configdomain.KeyObservedRegex])
-	offline, err10 := configdomain.ParseOffline(snapshot[configdomain.KeyOffline], configdomain.KeyOffline)
-	perennialRegex, err11 := configdomain.ParsePerennialRegex(snapshot[configdomain.KeyPerennialRegex])
-	pushHook, err12 := configdomain.ParsePushHook(snapshot[configdomain.KeyPushHook], configdomain.KeyPushHook)
-	shareNewBranches, err13 := configdomain.ParseShareNewBranches(snapshot[configdomain.KeyShareNewBranches], configdomain.KeyShareNewBranches)
-	shipDeleteTrackingBranch, err14 := configdomain.ParseShipDeleteTrackingBranch(snapshot[configdomain.KeyShipDeleteTrackingBranch], configdomain.KeyShipDeleteTrackingBranch)
-	shipStrategy, err15 := configdomain.ParseShipStrategy(snapshot[configdomain.KeyShipStrategy])
-	syncFeatureStrategy, err16 := configdomain.ParseSyncFeatureStrategy(snapshot[configdomain.KeySyncFeatureStrategy])
-	syncPerennialStrategy, err17 := configdomain.ParseSyncPerennialStrategy(snapshot[configdomain.KeySyncPerennialStrategy])
-	syncPrototypeStrategy, err18 := configdomain.ParseSyncPrototypeStrategy(snapshot[configdomain.KeySyncPrototypeStrategy])
-	syncTags, err19 := configdomain.ParseSyncTags(snapshot[configdomain.KeySyncTags], configdomain.KeySyncTags)
-	syncUpstream, err20 := configdomain.ParseSyncUpstream(snapshot[configdomain.KeySyncUpstream], configdomain.KeySyncUpstream)
-	branchType, err21 := configdomain.ParseBranchType(snapshot[configdomain.KeyUnknownBranchType])
-	unknownBranchType := configdomain.UnknownBranchTypeOpt(branchType)
+	autoResolve, errAutoResolve := configdomain.ParseAutoResolve(snapshot[configdomain.KeyAutoResolve], configdomain.KeyAutoResolve)
+	branchTypeOverrides, errBranchTypeOverride := NewBranchTypeOverridesInSnapshot(snapshot, runner)
+	contributionRegex, errContributionRegex := configdomain.ParseContributionRegex(snapshot[configdomain.KeyContributionRegex])
+	featureRegex, errFeatureRegex := configdomain.ParseFeatureRegex(snapshot[configdomain.KeyFeatureRegex])
+	forgeType, errForgeType := forgedomain.ParseForgeType(snapshot[configdomain.KeyForgeType])
+	githubConnectorType, errGitHubConnectorType := forgedomain.ParseGitHubConnectorType(snapshot[configdomain.KeyGitHubConnectorType])
+	gitlabConnectorType, errGitLabConnectorType := forgedomain.ParseGitLabConnectorType(snapshot[configdomain.KeyGitLabConnectorType])
+	lineage, errLineage := NewLineageFromSnapshot(snapshot, updateOutdated, runner)
+	newBranchTypeValue, errNewBranchType := configdomain.ParseBranchType(snapshot[configdomain.KeyNewBranchType])
+	newBranchType := configdomain.NewBranchTypeOpt(newBranchTypeValue)
+	observedRegex, errObservedRegex := configdomain.ParseObservedRegex(snapshot[configdomain.KeyObservedRegex])
+	offline, errOffline := configdomain.ParseOffline(snapshot[configdomain.KeyOffline], configdomain.KeyOffline)
+	perennialRegex, errPerennialRegex := configdomain.ParsePerennialRegex(snapshot[configdomain.KeyPerennialRegex])
+	proposalsShowLineage, errProposalsShowLineage := configdomain.ParseProposalsShowLineage(snapshot[configdomain.KeyProposalsShowLineage])
+	pushHook, errPushHook := configdomain.ParsePushHook(snapshot[configdomain.KeyPushHook], configdomain.KeyPushHook)
+	shareNewBranches, errShareNewBranches := configdomain.ParseShareNewBranches(snapshot[configdomain.KeyShareNewBranches], configdomain.KeyShareNewBranches)
+	shipDeleteTrackingBranch, errShipDeleteTrackingBranch := configdomain.ParseShipDeleteTrackingBranch(snapshot[configdomain.KeyShipDeleteTrackingBranch], configdomain.KeyShipDeleteTrackingBranch)
+	shipStrategy, errShipStrategy := configdomain.ParseShipStrategy(snapshot[configdomain.KeyShipStrategy])
+	syncFeatureStrategy, errSyncFeatureStrategy := configdomain.ParseSyncFeatureStrategy(snapshot[configdomain.KeySyncFeatureStrategy])
+	syncPerennialStrategy, errSyncPerennialStrategy := configdomain.ParseSyncPerennialStrategy(snapshot[configdomain.KeySyncPerennialStrategy])
+	syncPrototypeStrategy, errSyncPrototypeStrategy := configdomain.ParseSyncPrototypeStrategy(snapshot[configdomain.KeySyncPrototypeStrategy])
+	syncTags, errSyncTags := configdomain.ParseSyncTags(snapshot[configdomain.KeySyncTags], configdomain.KeySyncTags)
+	syncUpstream, errSyncUpstream := configdomain.ParseSyncUpstream(snapshot[configdomain.KeySyncUpstream], configdomain.KeySyncUpstream)
+	unknownBranchTypeValue, errUnknownBranchType := configdomain.ParseBranchType(snapshot[configdomain.KeyUnknownBranchType])
+	unknownBranchType := configdomain.UnknownBranchTypeOpt(unknownBranchTypeValue)
 	return configdomain.PartialConfig{
 		Aliases:                  aliases,
+		AutoResolve:              autoResolve,
 		BitbucketAppPassword:     forgedomain.ParseBitbucketAppPassword(snapshot[configdomain.KeyBitbucketAppPassword]),
 		BitbucketUsername:        forgedomain.ParseBitbucketUsername(snapshot[configdomain.KeyBitbucketUsername]),
 		BranchTypeOverrides:      branchTypeOverrides,
@@ -122,6 +125,7 @@ func NewPartialConfigFromSnapshot(snapshot configdomain.SingleSnapshot, updateOu
 		Offline:                  offline,
 		PerennialBranches:        gitdomain.ParseLocalBranchNames(snapshot[configdomain.KeyPerennialBranches]),
 		PerennialRegex:           perennialRegex,
+		ProposalsShowLineage:     proposalsShowLineage,
 		PushHook:                 pushHook,
 		ShareNewBranches:         shareNewBranches,
 		ShipDeleteTrackingBranch: shipDeleteTrackingBranch,
@@ -133,5 +137,5 @@ func NewPartialConfigFromSnapshot(snapshot configdomain.SingleSnapshot, updateOu
 		SyncUpstream:             syncUpstream,
 		UnknownBranchType:        unknownBranchType,
 		Verbose:                  None[configdomain.Verbose](),
-	}, cmp.Or(err1, err2, err3, err4, err5, err6, err7, err8, err9, err10, err11, err12, err13, err14, err15, err16, err17, err18, err19, err20, err21)
+	}, cmp.Or(errAutoResolve, errBranchTypeOverride, errContributionRegex, errFeatureRegex, errForgeType, errGitHubConnectorType, errGitLabConnectorType, errLineage, errNewBranchType, errObservedRegex, errOffline, errPerennialRegex, errProposalsShowLineage, errPushHook, errShareNewBranches, errShipDeleteTrackingBranch, errShipStrategy, errSyncFeatureStrategy, errSyncPerennialStrategy, errSyncPrototypeStrategy, errSyncTags, errSyncUpstream, errUnknownBranchType)
 }

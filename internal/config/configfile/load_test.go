@@ -43,11 +43,15 @@ share-new-branches = "push"
 forge-type = "github"
 origin-hostname = "github.com"
 
+[propose]
+lineage = "ci"
+
 [ship]
 delete-tracking-branch = false
 strategy = "api"
 
 [sync]
+auto-resolve = false
 feature-strategy = "merge"
 perennial-strategy = "rebase"
 prototype-strategy = "compress"
@@ -82,11 +86,15 @@ prototype-branches = "compress"
 					ForgeType:      Ptr("github"),
 					OriginHostname: Ptr("github.com"),
 				},
+				Propose: &configfile.Propose{
+					Lineage: Ptr("ci"),
+				},
 				Ship: &configfile.Ship{
 					DeleteTrackingBranch: Ptr(false),
 					Strategy:             Ptr("api"),
 				},
 				Sync: &configfile.Sync{
+					AutoResolve:       Ptr(false),
 					FeatureStrategy:   Ptr("merge"),
 					PerennialStrategy: Ptr("rebase"),
 					PrototypeStrategy: Ptr("compress"),

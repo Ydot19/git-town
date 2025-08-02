@@ -39,19 +39,27 @@ func switchCmd() *cobra.Command {
 		Short:   switchDesc,
 		Long:    cmdhelpers.Long(switchDesc),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			branchTypes, err1 := readTypeFlag(cmd)
-			allBranches, err2 := readAllFlag(cmd)
-			displayTypes, err3 := readDisplayTypesFlag(cmd)
+			branchTypes, errBranchTypes := readTypeFlag(cmd)
+			allBranches, errAllBranches := readAllFlag(cmd)
+			displayTypes, errDisplayTypes := readDisplayTypesFlag(cmd)
 			merge, err4 := readMergeFlag(cmd)
 			verbose, err5 := readVerboseFlag(cmd)
-			if err := cmp.Or(err1, err2, err3, err4, err5); err != nil {
+			if err := cmp.Or(errBranchTypes, errAllBranches, errDisplayTypes, err4, err5); err != nil {
 				return err
 			}
-			cliConfig := cliconfig.CliConfig{
-				DryRun:  false,
-				Verbose: verbose,
-			}
-			return executeSwitch(args, cliConfig, allBranches, merge, displayTypes, branchTypes)
+			cliConfig := cliconfig.New(cliconfig.NewArgs{
+				AutoResolve: None[configdomain.AutoResolve](),
+				DryRun:      None[configdomain.DryRun](),
+				Verbose:     verbose,
+			})
+			return executeSwitch(executeSwitchArgs{
+				allBranches:  allBranches,
+				argv:         args,
+				branchTypes:  branchTypes,
+				cliConfig:    cliConfig,
+				displayTypes: displayTypes,
+				merge:        merge,
+			})
 		},
 	}
 	addAllFlag(&cmd)
@@ -62,9 +70,18 @@ func switchCmd() *cobra.Command {
 	return &cmd
 }
 
-func executeSwitch(args []string, cliConfig cliconfig.CliConfig, allBranches configdomain.AllBranches, merge configdomain.SwitchUsingMerge, displayTypes configdomain.DisplayTypes, branchTypes []configdomain.BranchType) error {
+type executeSwitchArgs struct {
+	allBranches  configdomain.AllBranches
+	argv         []string
+	branchTypes  []configdomain.BranchType
+	cliConfig    configdomain.PartialConfig
+	displayTypes configdomain.DisplayTypes
+	merge        configdomain.SwitchUsingMerge
+}
+
+func executeSwitch(args executeSwitchArgs) error {
 	repo, err := execute.OpenRepo(execute.OpenRepoArgs{
-		CliConfig:        cliConfig,
+		CliConfig:        args.cliConfig,
 		PrintBranchNames: true,
 		PrintCommands:    true,
 		ValidateGitRepo:  true,
@@ -73,7 +90,7 @@ func executeSwitch(args []string, cliConfig cliconfig.CliConfig, allBranches con
 	if err != nil {
 		return err
 	}
-	data, exit, err := determineSwitchData(args, repo, cliConfig)
+	data, exit, err := determineSwitchData(args.argv, repo)
 	if err != nil || exit {
 		return err
 	}
@@ -81,13 +98,13 @@ func executeSwitch(args []string, cliConfig cliconfig.CliConfig, allBranches con
 	unknownBranchType := repo.UnvalidatedConfig.NormalConfig.UnknownBranchType
 	entries := dialog.NewSwitchBranchEntries(dialog.NewSwitchBranchEntriesArgs{
 		BranchInfos:       data.branchesSnapshot.Branches,
-		BranchTypes:       branchTypes,
+		BranchTypes:       args.branchTypes,
 		BranchesAndTypes:  branchesAndTypes,
 		ExcludeBranches:   gitdomain.LocalBranchNames{},
 		Lineage:           data.config.NormalConfig.Lineage,
 		MainBranch:        repo.UnvalidatedConfig.UnvalidatedConfig.MainBranch,
 		Regexes:           data.regexes,
-		ShowAllBranches:   allBranches,
+		ShowAllBranches:   args.allBranches,
 		UnknownBranchType: unknownBranchType,
 	})
 	if len(entries) == 0 {
@@ -97,7 +114,7 @@ func executeSwitch(args []string, cliConfig cliconfig.CliConfig, allBranches con
 	branchToCheckout, exit, err := dialog.SwitchBranch(dialog.SwitchBranchArgs{
 		CurrentBranch:      Some(data.initialBranch),
 		Cursor:             cursor,
-		DisplayBranchTypes: displayTypes,
+		DisplayBranchTypes: args.displayTypes,
 		Entries:            entries,
 		InputName:          "switch-branch",
 		Inputs:             data.inputs,
@@ -110,7 +127,7 @@ func executeSwitch(args []string, cliConfig cliconfig.CliConfig, allBranches con
 	if branchToCheckout == data.initialBranch {
 		return nil
 	}
-	err = repo.Git.CheckoutBranch(repo.Frontend, branchToCheckout, merge)
+	err = repo.Git.CheckoutBranch(repo.Frontend, branchToCheckout, args.merge)
 	if err != nil {
 		exitCode := 1
 		var exitErr *exec.ExitError
@@ -133,7 +150,7 @@ type switchData struct {
 	uncommittedChanges bool
 }
 
-func determineSwitchData(args []string, repo execute.OpenRepoResult, cliConfig cliconfig.CliConfig) (data switchData, exit dialogdomain.Exit, err error) {
+func determineSwitchData(args []string, repo execute.OpenRepoResult) (data switchData, exit dialogdomain.Exit, err error) {
 	inputs := dialogcomponents.LoadInputs(os.Environ())
 	repoStatus, err := repo.Git.RepoStatus(repo.Backend)
 	if err != nil {
@@ -156,7 +173,6 @@ func determineSwitchData(args []string, repo execute.OpenRepoResult, cliConfig c
 		RootDir:               repo.RootDir,
 		UnvalidatedConfig:     repo.UnvalidatedConfig,
 		ValidateNoOpenChanges: false,
-		Verbose:               cliConfig.Verbose,
 	})
 	if err != nil || exit {
 		return data, exit, err

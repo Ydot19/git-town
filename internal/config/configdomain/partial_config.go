@@ -7,9 +7,17 @@ import (
 	. "github.com/git-town/git-town/v21/pkg/prelude"
 )
 
-// PartialConfig contains configuration data as it is stored in the local or global Git configuration.
+// PartialConfig contains configuration data as it is stored in one of the configuration sources for Git Town:
+// - local Git metadata
+// - global Git metadata
+// - the configuration file
+// - CLI arguments
+//
+// Any of these configuration data source can contain as much or as little configuration information as it wants.
+// Hence, all fields here are optional.
 type PartialConfig struct {
 	Aliases                  Aliases
+	AutoResolve              Option[AutoResolve]
 	BitbucketAppPassword     Option[forgedomain.BitbucketAppPassword]
 	BitbucketUsername        Option[forgedomain.BitbucketUsername]
 	BranchTypeOverrides      BranchTypeOverrides
@@ -34,6 +42,7 @@ type PartialConfig struct {
 	Offline                  Option[Offline]
 	PerennialBranches        gitdomain.LocalBranchNames
 	PerennialRegex           Option[PerennialRegex]
+	ProposalsShowLineage     Option[ProposalsShowLineage]
 	PushHook                 Option[PushHook]
 	ShareNewBranches         Option[ShareNewBranches]
 	ShipDeleteTrackingBranch Option[ShipDeleteTrackingBranch]
@@ -58,6 +67,7 @@ func EmptyPartialConfig() PartialConfig {
 func (self PartialConfig) Merge(other PartialConfig) PartialConfig {
 	return PartialConfig{
 		Aliases:                  mapstools.Merge(other.Aliases, self.Aliases),
+		AutoResolve:              other.AutoResolve.Or(self.AutoResolve),
 		BitbucketAppPassword:     other.BitbucketAppPassword.Or(self.BitbucketAppPassword),
 		BitbucketUsername:        other.BitbucketUsername.Or(self.BitbucketUsername),
 		BranchTypeOverrides:      other.BranchTypeOverrides.Concat(self.BranchTypeOverrides),
@@ -82,6 +92,7 @@ func (self PartialConfig) Merge(other PartialConfig) PartialConfig {
 		Offline:                  other.Offline.Or(self.Offline),
 		PerennialBranches:        append(other.PerennialBranches, self.PerennialBranches...),
 		PerennialRegex:           other.PerennialRegex.Or(self.PerennialRegex),
+		ProposalsShowLineage:     other.ProposalsShowLineage.Or(self.ProposalsShowLineage),
 		PushHook:                 other.PushHook.Or(self.PushHook),
 		ShareNewBranches:         other.ShareNewBranches.Or(self.ShareNewBranches),
 		ShipDeleteTrackingBranch: other.ShipDeleteTrackingBranch.Or(self.ShipDeleteTrackingBranch),

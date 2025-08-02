@@ -54,6 +54,7 @@ const (
 	KeyAliasSetParent                      = Key("alias.set-parent")
 	KeyAliasShip                           = Key("alias.ship")
 	KeyAliasSync                           = Key("alias.sync")
+	KeyAutoResolve                         = Key("auto-resolve")
 	KeyBitbucketAppPassword                = Key("git-town.bitbucket-app-password")
 	KeyBitbucketUsername                   = Key("git-town.bitbucket-username")
 	KeyCodebergToken                       = Key("git-town.codeberg-token")
@@ -94,6 +95,7 @@ const (
 	KeyOffline                             = Key("git-town.offline")
 	KeyPerennialBranches                   = Key("git-town.perennial-branches")
 	KeyPerennialRegex                      = Key("git-town.perennial-regex")
+	KeyProposalsShowLineage                = Key("git-town.proposals-show-lineage")
 	KeyPushHook                            = Key("git-town.push-hook")
 	KeyShareNewBranches                    = Key("git-town.share-new-branches")
 	KeyShipDeleteTrackingBranch            = Key("git-town.ship-delete-tracking-branch")
@@ -109,7 +111,7 @@ const (
 )
 
 var keys = []Key{
-	KeyHostingOriginHostname,
+	KeyAutoResolve,
 	KeyBitbucketAppPassword,
 	KeyBitbucketUsername,
 	KeyCodebergToken,
@@ -144,6 +146,7 @@ var keys = []Key{
 	KeyGitLabToken,
 	KeyGitUserEmail,
 	KeyGitUserName,
+	KeyHostingOriginHostname,
 	KeyMainBranch,
 	KeyNewBranchType,
 	KeyObservedRegex,
@@ -151,6 +154,7 @@ var keys = []Key{
 	KeyOffline,
 	KeyPerennialBranches,
 	KeyPerennialRegex,
+	KeyProposalsShowLineage,
 	KeyPushHook,
 	KeyShareNewBranches,
 	KeyShipDeleteTrackingBranch,

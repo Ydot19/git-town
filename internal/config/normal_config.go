@@ -17,8 +17,20 @@ import (
 	"github.com/git-town/git-town/v21/pkg/set"
 )
 
+// NormalConfig contains the final configuration data to be used by Git Town,
+// merged from the various configuration sources:
+// - local Git metadata,
+// - global Git metadata,
+// - configuration file
+// - CLI arguments
+// - default values
+//
+// It only contains the configuration data that doesn't need to be prompted from the user if missing,
+// but can be used as-is.
+// Configuration data that needs to be prompted from the user exists in UnvalidatedConfigData/ValidatedConfigData.
 type NormalConfig struct {
 	Aliases                  configdomain.Aliases
+	AutoResolve              configdomain.AutoResolve
 	BitbucketAppPassword     Option[forgedomain.BitbucketAppPassword]
 	BitbucketUsername        Option[forgedomain.BitbucketUsername]
 	BranchTypeOverrides      configdomain.BranchTypeOverrides
@@ -40,6 +52,7 @@ type NormalConfig struct {
 	Offline                  configdomain.Offline
 	PerennialBranches        gitdomain.LocalBranchNames
 	PerennialRegex           Option[configdomain.PerennialRegex]
+	ProposalsShowLineage     configdomain.ProposalsShowLineage
 	PushHook                 configdomain.PushHook
 	ShareNewBranches         configdomain.ShareNewBranches
 	ShipDeleteTrackingBranch configdomain.ShipDeleteTrackingBranch
@@ -69,6 +82,7 @@ func (self *NormalConfig) NoPushHook() configdomain.NoPushHook {
 func (self *NormalConfig) OverwriteWith(other configdomain.PartialConfig) NormalConfig {
 	return NormalConfig{
 		Aliases:                  other.Aliases,
+		AutoResolve:              other.AutoResolve.GetOrElse(self.AutoResolve),
 		BitbucketAppPassword:     other.BitbucketAppPassword,
 		BitbucketUsername:        other.BitbucketUsername,
 		BranchTypeOverrides:      other.BranchTypeOverrides.Concat(self.BranchTypeOverrides),
@@ -90,6 +104,7 @@ func (self *NormalConfig) OverwriteWith(other configdomain.PartialConfig) Normal
 		Offline:                  other.Offline.GetOrElse(self.Offline),
 		PerennialBranches:        other.PerennialBranches,
 		PerennialRegex:           other.PerennialRegex,
+		ProposalsShowLineage:     other.ProposalsShowLineage.GetOrElse(self.ProposalsShowLineage),
 		PushHook:                 other.PushHook.GetOrElse(self.PushHook),
 		ShareNewBranches:         other.ShareNewBranches.GetOrElse(self.ShareNewBranches),
 		ShipDeleteTrackingBranch: other.ShipDeleteTrackingBranch.GetOrElse(self.ShipDeleteTrackingBranch),
@@ -208,6 +223,7 @@ func (self *NormalConfig) SetPerennialBranches(runner subshelldomain.Runner, bra
 func DefaultNormalConfig() NormalConfig {
 	return NormalConfig{
 		Aliases:                  configdomain.Aliases{},
+		AutoResolve:              true,
 		BitbucketAppPassword:     None[forgedomain.BitbucketAppPassword](),
 		BitbucketUsername:        None[forgedomain.BitbucketUsername](),
 		BranchTypeOverrides:      configdomain.BranchTypeOverrides{},
@@ -229,6 +245,7 @@ func DefaultNormalConfig() NormalConfig {
 		Offline:                  false,
 		PerennialBranches:        gitdomain.LocalBranchNames{},
 		PerennialRegex:           None[configdomain.PerennialRegex](),
+		ProposalsShowLineage:     configdomain.ProposalsShowLineageNone,
 		PushHook:                 true,
 		ShareNewBranches:         configdomain.ShareNewBranchesNone,
 		ShipDeleteTrackingBranch: true,
@@ -247,6 +264,7 @@ func NewNormalConfigFromPartial(partial configdomain.PartialConfig, defaults Nor
 	syncFeatureStrategy := partial.SyncFeatureStrategy.GetOrElse(defaults.SyncFeatureStrategy)
 	return NormalConfig{
 		Aliases:                  partial.Aliases,
+		AutoResolve:              partial.AutoResolve.GetOrElse(defaults.AutoResolve),
 		BitbucketAppPassword:     partial.BitbucketAppPassword,
 		BitbucketUsername:        partial.BitbucketUsername,
 		BranchTypeOverrides:      partial.BranchTypeOverrides,
@@ -268,6 +286,7 @@ func NewNormalConfigFromPartial(partial configdomain.PartialConfig, defaults Nor
 		Offline:                  partial.Offline.GetOrElse(defaults.Offline),
 		PerennialBranches:        partial.PerennialBranches,
 		PerennialRegex:           partial.PerennialRegex,
+		ProposalsShowLineage:     partial.ProposalsShowLineage.GetOrElse(defaults.ProposalsShowLineage),
 		PushHook:                 partial.PushHook.GetOrElse(defaults.PushHook),
 		ShareNewBranches:         partial.ShareNewBranches.GetOrElse(defaults.ShareNewBranches),
 		ShipDeleteTrackingBranch: partial.ShipDeleteTrackingBranch.GetOrElse(defaults.ShipDeleteTrackingBranch),

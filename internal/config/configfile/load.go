@@ -55,9 +55,11 @@ func Validate(data Data, finalMessages stringslice.Collector) (configdomain.Part
 	var hostingOriginHostname Option[configdomain.HostingOriginHostname]
 	var mainBranch Option[gitdomain.LocalBranchName]
 	var newBranchType Option[configdomain.NewBranchType]
+	var autoResolve Option[configdomain.AutoResolve]
 	var observedRegex Option[configdomain.ObservedRegex]
 	var perennialBranches gitdomain.LocalBranchNames
 	var perennialRegex Option[configdomain.PerennialRegex]
+	var proposalsShowLineage Option[configdomain.ProposalsShowLineage]
 	var pushHook Option[configdomain.PushHook]
 	var shareNewBranches Option[configdomain.ShareNewBranches]
 	var shipDeleteTrackingBranch Option[configdomain.ShipDeleteTrackingBranch]
@@ -173,6 +175,12 @@ func Validate(data Data, finalMessages stringslice.Collector) (configdomain.Part
 			hostingOriginHostname = configdomain.ParseHostingOriginHostname(*data.Hosting.OriginHostname)
 		}
 	}
+	if data.Propose != nil {
+		if data.Propose.Lineage != nil {
+			proposalsShowLineage, err = configdomain.ParseProposalsShowLineage(*data.Propose.Lineage)
+			ec.Check(err)
+		}
+	}
 	if data.Ship != nil {
 		if data.Ship.DeleteTrackingBranch != nil {
 			shipDeleteTrackingBranch = Some(configdomain.ShipDeleteTrackingBranch(*data.Ship.DeleteTrackingBranch))
@@ -196,6 +204,9 @@ func Validate(data Data, finalMessages stringslice.Collector) (configdomain.Part
 		}
 	}
 	if data.Sync != nil {
+		if data.Sync.AutoResolve != nil {
+			autoResolve = Some(configdomain.AutoResolve(*data.Sync.AutoResolve))
+		}
 		if data.Sync.FeatureStrategy != nil {
 			syncFeatureStrategy, err = configdomain.ParseSyncFeatureStrategy(*data.Sync.FeatureStrategy)
 			ec.Check(err)
@@ -241,10 +252,12 @@ func Validate(data Data, finalMessages stringslice.Collector) (configdomain.Part
 		Lineage:                  configdomain.Lineage{},
 		MainBranch:               mainBranch,
 		NewBranchType:            newBranchType,
+		AutoResolve:              autoResolve,
 		ObservedRegex:            observedRegex,
 		Offline:                  None[configdomain.Offline](),
 		PerennialBranches:        perennialBranches,
 		PerennialRegex:           perennialRegex,
+		ProposalsShowLineage:     proposalsShowLineage,
 		PushHook:                 pushHook,
 		ShareNewBranches:         shareNewBranches,
 		ShipDeleteTrackingBranch: shipDeleteTrackingBranch,

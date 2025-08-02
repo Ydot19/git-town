@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/git-town/git-town/v21/internal/cli/colors"
 	"github.com/git-town/git-town/v21/internal/cli/dialog"
+	"github.com/git-town/git-town/v21/internal/cli/dialog/dialogcolors"
 	"github.com/git-town/git-town/v21/internal/cli/dialog/dialogcomponents"
 	"github.com/git-town/git-town/v21/internal/cli/dialog/dialogdomain"
 	"github.com/git-town/git-town/v21/internal/cli/flags"
@@ -17,40 +17,52 @@ import (
 	"github.com/git-town/git-town/v21/internal/execute"
 	"github.com/git-town/git-town/v21/internal/forge/forgedomain"
 	"github.com/git-town/git-town/v21/internal/git/gitdomain"
+	"github.com/git-town/git-town/v21/pkg/colors"
 	. "github.com/git-town/git-town/v21/pkg/prelude"
 	"github.com/spf13/cobra"
 )
 
 const (
-	branchDesc = "Display the local branch hierarchy and types"
+	branchCommand = "branch"
+	branchDesc    = `
+Display hierarchy either for local branches or an existing proposal of stack.
+	`
 	branchHelp = `
 Git Town's equivalent of the "git branch" command.`
 )
 
 func branchCmd() *cobra.Command {
+	addProposalLineageFlag, readProposalFlag := flags.Proposal("Display the proposal stack lineage based on the current branch")
 	addVerboseFlag, readVerboseFlag := flags.Verbose()
 	cmd := cobra.Command{
-		Use:   "branch",
+		Use:   branchCommand,
 		Args:  cobra.NoArgs,
 		Short: branchDesc,
 		Long:  cmdhelpers.Long(branchDesc, branchHelp),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			proposalLineageAction, err := readProposalFlag(cmd)
+			if err != nil {
+				return err
+			}
 			verbose, err := readVerboseFlag(cmd)
 			if err != nil {
 				return err
 			}
-			cliConfig := cliconfig.CliConfig{
-				DryRun:  false,
-				Verbose: verbose,
-			}
-			return executeBranch(cliConfig)
+			cliConfig := cliconfig.New(cliconfig.NewArgs{
+				AutoResolve: None[configdomain.AutoResolve](),
+				DryRun:      None[configdomain.DryRun](),
+				Verbose:     verbose,
+			})
+			return executeBranch(cliConfig, proposalLineageAction)
 		},
 	}
+
+	addProposalLineageFlag(&cmd)
 	addVerboseFlag(&cmd)
 	return &cmd
 }
 
-func executeBranch(cliConfig cliconfig.CliConfig) error {
+func executeBranch(cliConfig configdomain.PartialConfig, proposal configdomain.Proposal) error {
 	repo, err := execute.OpenRepo(execute.OpenRepoArgs{
 		CliConfig:        cliConfig,
 		PrintBranchNames: true,
@@ -61,7 +73,7 @@ func executeBranch(cliConfig cliconfig.CliConfig) error {
 	if err != nil {
 		return err
 	}
-	data, exit, err := determineBranchData(repo, cliConfig)
+	data, exit, err := determineBranchData(repo)
 	if err != nil || exit {
 		return err
 	}
@@ -80,7 +92,7 @@ func executeBranch(cliConfig cliconfig.CliConfig) error {
 	return nil
 }
 
-func determineBranchData(repo execute.OpenRepoResult, cliConfig cliconfig.CliConfig) (data branchData, exit dialogdomain.Exit, err error) {
+func determineBranchData(repo execute.OpenRepoResult) (data branchData, exit dialogdomain.Exit, err error) {
 	inputs := dialogcomponents.LoadInputs(os.Environ())
 	repoStatus, err := repo.Git.RepoStatus(repo.Backend)
 	if err != nil {
@@ -103,7 +115,6 @@ func determineBranchData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCon
 		RootDir:               repo.RootDir,
 		UnvalidatedConfig:     repo.UnvalidatedConfig,
 		ValidateNoOpenChanges: false,
-		Verbose:               cliConfig.Verbose,
 	})
 	if err != nil || exit {
 		return data, exit, err
@@ -115,7 +126,7 @@ func determineBranchData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCon
 			initialBranchOpt = Some(initialBranch)
 		}
 	}
-	colors := colors.NewDialogColors()
+	colors := dialogcolors.NewDialogColors()
 	branchesAndTypes := repo.UnvalidatedConfig.UnvalidatedBranchesAndTypes(branchesSnapshot.Branches.Names())
 	return branchData{
 		branchInfos:      branchesSnapshot.Branches,
@@ -128,7 +139,7 @@ func determineBranchData(repo execute.OpenRepoResult, cliConfig cliconfig.CliCon
 type branchData struct {
 	branchInfos      gitdomain.BranchInfos
 	branchesAndTypes configdomain.BranchesAndTypes
-	colors           colors.DialogColors
+	colors           dialogcolors.DialogColors
 	initialBranchOpt Option[gitdomain.LocalBranchName]
 }
 

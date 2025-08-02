@@ -67,6 +67,7 @@ it also syncs all affected branches.
 )
 
 func hackCmd() *cobra.Command {
+	addAutoResolveFlag, readAutoResolveFlag := flags.AutoResolve()
 	addBeamFlag, readBeamFlag := flags.Beam()
 	addCommitFlag, readCommitFlag := flags.Commit()
 	addDetachedFlag, readDetachedFlag := flags.Detached()
@@ -82,25 +83,36 @@ func hackCmd() *cobra.Command {
 		Short:   hackDesc,
 		Long:    cmdhelpers.Long(hackDesc, hackHelp),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			beam, err1 := readBeamFlag(cmd)
-			commit, err2 := readCommitFlag(cmd)
-			commitMessage, err3 := readCommitMessageFlag(cmd)
-			detached, err4 := readDetachedFlag(cmd)
-			dryRun, err5 := readDryRunFlag(cmd)
-			propose, err6 := readProposeFlag(cmd)
-			prototype, err7 := readPrototypeFlag(cmd)
-			verbose, err8 := readVerboseFlag(cmd)
-			if err := cmp.Or(err1, err2, err3, err4, err5, err6, err7, err8); err != nil {
+			autoResolve, errAutoResolve := readAutoResolveFlag(cmd)
+			beam, errBeam := readBeamFlag(cmd)
+			commit, errCommit := readCommitFlag(cmd)
+			commitMessage, errCommitMessage := readCommitMessageFlag(cmd)
+			detached, errDetached := readDetachedFlag(cmd)
+			dryRun, errDryRun := readDryRunFlag(cmd)
+			propose, errPropose := readProposeFlag(cmd)
+			prototype, errPrototype := readPrototypeFlag(cmd)
+			verbose, errVerbose := readVerboseFlag(cmd)
+			if err := cmp.Or(errAutoResolve, errBeam, errCommit, errCommitMessage, errDetached, errDryRun, errPropose, errPrototype, errVerbose); err != nil {
 				return err
 			}
 			if commitMessage.IsSome() || propose.IsTrue() {
 				commit = true
 			}
-			cliConfig := cliconfig.CliConfig{
-				DryRun:  dryRun,
-				Verbose: verbose,
-			}
-			return executeHack(args, cliConfig, beam, commit, commitMessage, detached, propose, prototype)
+			cliConfig := cliconfig.New(cliconfig.NewArgs{
+				AutoResolve: autoResolve,
+				DryRun:      dryRun,
+				Verbose:     verbose,
+			})
+			return executeHack(hackArgs{
+				argv:          args,
+				beam:          beam,
+				cliConfig:     cliConfig,
+				commit:        commit,
+				commitMessage: commitMessage,
+				detached:      detached,
+				propose:       propose,
+				prototype:     prototype,
+			})
 		},
 	}
 	addBeamFlag(&cmd)
@@ -108,15 +120,16 @@ func hackCmd() *cobra.Command {
 	addCommitMessageFlag(&cmd)
 	addDetachedFlag(&cmd)
 	addDryRunFlag(&cmd)
+	addAutoResolveFlag(&cmd)
 	addProposeFlag(&cmd)
 	addPrototypeFlag(&cmd)
 	addVerboseFlag(&cmd)
 	return &cmd
 }
 
-func executeHack(args []string, cliConfig cliconfig.CliConfig, beam configdomain.Beam, commit configdomain.Commit, commitMessage Option[gitdomain.CommitMessage], detached configdomain.Detached, propose configdomain.Propose, prototype configdomain.Prototype) error {
+func executeHack(args hackArgs) error {
 	repo, err := execute.OpenRepo(execute.OpenRepoArgs{
-		CliConfig:        cliConfig,
+		CliConfig:        args.cliConfig,
 		PrintBranchNames: true,
 		PrintCommands:    true,
 		ValidateGitRepo:  true,
@@ -125,7 +138,7 @@ func executeHack(args []string, cliConfig cliconfig.CliConfig, beam configdomain
 	if err != nil {
 		return err
 	}
-	data, exit, err := determineHackData(args, repo, cliConfig, beam, commit, commitMessage, detached, propose, prototype)
+	data, exit, err := determineHackData(args, repo)
 	if err != nil || exit {
 		return err
 	}
@@ -139,22 +152,19 @@ func executeHack(args []string, cliConfig cliconfig.CliConfig, beam configdomain
 			beginStashSize:        createNewFeatureBranchData.stashSize,
 			branchInfosLastRun:    createNewFeatureBranchData.branchInfosLastRun,
 			commandsCounter:       repo.CommandsCounter,
-			dryRun:                cliConfig.DryRun,
+			dryRun:                createNewFeatureBranchData.config.NormalConfig.DryRun,
 			finalMessages:         repo.FinalMessages,
 			frontend:              repo.Frontend,
 			git:                   repo.Git,
 			rootDir:               repo.RootDir,
-			verbose:               cliConfig.Verbose,
 		})
 	}
 	if doConvertToFeatureBranch {
-		return convertToFeatureBranch(convertToFeatureBranchArgs{
+		return convertToFeatureBranch(repo, convertToFeatureBranchArgs{
 			beginConfigSnapshot: repo.ConfigSnapshot,
 			config:              convertToFeatureBranchData.config,
 			makeFeatureData:     convertToFeatureBranchData,
-			repo:                repo,
-			rootDir:             repo.RootDir,
-			verbose:             cliConfig.Verbose,
+			verbose:             convertToFeatureBranchData.config.NormalConfig.Verbose,
 		})
 	}
 	panic("both config arms were nil")
@@ -204,7 +214,6 @@ func createFeatureBranch(args createFeatureBranchArgs) error {
 		PendingCommand:          None[string](),
 		RootDir:                 args.rootDir,
 		RunState:                runState,
-		Verbose:                 args.verbose,
 	})
 }
 
@@ -221,17 +230,16 @@ type createFeatureBranchArgs struct {
 	frontend              subshelldomain.Runner
 	git                   git.Commands
 	rootDir               gitdomain.RepoRootDir
-	verbose               configdomain.Verbose
 }
 
-func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cliconfig.CliConfig, beam configdomain.Beam, commit configdomain.Commit, commitMessage Option[gitdomain.CommitMessage], detached configdomain.Detached, propose configdomain.Propose, prototype configdomain.Prototype) (data hackData, exit dialogdomain.Exit, err error) {
+func determineHackData(args hackArgs, repo execute.OpenRepoResult) (data hackData, exit dialogdomain.Exit, err error) {
 	preFetchBranchSnapshot, err := repo.Git.BranchesSnapshot(repo.Backend)
 	if err != nil {
 		return data, false, err
 	}
 	inputs := dialogcomponents.LoadInputs(os.Environ())
 	previousBranch := repo.Git.PreviouslyCheckedOutBranch(repo.Backend)
-	targetBranches := gitdomain.NewLocalBranchNames(args...)
+	targetBranches := gitdomain.NewLocalBranchNames(args.argv...)
 	var repoStatus gitdomain.RepoStatus
 	repoStatus, err = repo.Git.RepoStatus(repo.Backend)
 	if err != nil {
@@ -261,8 +269,8 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 		CommandsCounter:       repo.CommandsCounter,
 		ConfigSnapshot:        repo.ConfigSnapshot,
 		Connector:             connector,
-		Detached:              detached,
-		Fetch:                 len(args) == 1 && !repoStatus.OpenChanges && beam.IsFalse() && commit.IsFalse(),
+		Detached:              args.detached,
+		Fetch:                 len(args.argv) == 1 && !repoStatus.OpenChanges && args.beam.IsFalse() && args.commit.IsFalse(),
 		FinalMessages:         repo.FinalMessages,
 		Frontend:              repo.Frontend,
 		Git:                   repo.Git,
@@ -273,7 +281,6 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 		RootDir:               repo.RootDir,
 		UnvalidatedConfig:     repo.UnvalidatedConfig,
 		ValidateNoOpenChanges: false,
-		Verbose:               cliConfig.Verbose,
 	})
 	if err != nil || exit {
 		return data, exit, err
@@ -339,7 +346,7 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 		return data, false, fmt.Errorf(messages.BranchAlreadyExistsRemotely, targetBranch)
 	}
 	branchNamesToSync := gitdomain.LocalBranchNames{validatedConfig.ValidatedConfigData.MainBranch}
-	if detached {
+	if args.detached {
 		branchNamesToSync = validatedConfig.RemovePerennials(branchNamesToSync)
 	}
 	branchInfosToSync, nonExistingBranches := branchesSnapshot.Branches.Select(repo.UnvalidatedConfig.NormalConfig.DevRemote, branchNamesToSync...)
@@ -349,7 +356,7 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 	}
 	commitsToBeam := []gitdomain.Commit{}
 	ancestor, hasAncestor := latestExistingAncestor(initialBranch, branchesSnapshot.Branches, validatedConfig.NormalConfig.Lineage).Get()
-	if beam.IsTrue() && hasAncestor {
+	if args.beam.IsTrue() && hasAncestor {
 		commitsInBranch, err := repo.Git.CommitsInFeatureBranch(repo.Backend, initialBranch, ancestor.BranchName())
 		if err != nil {
 			return data, false, err
@@ -360,20 +367,20 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 		}
 	}
 	if validatedConfig.NormalConfig.ShareNewBranches == configdomain.ShareNewBranchesPropose {
-		propose = true
+		args.propose = true
 	}
 	data = Left[appendFeatureData, convertToFeatureData](appendFeatureData{
-		beam:                      beam,
+		beam:                      args.beam,
 		branchInfos:               branchesSnapshot.Branches,
 		branchInfosLastRun:        branchInfosLastRun,
 		branchesSnapshot:          branchesSnapshot,
 		branchesToSync:            branchesToSync,
-		commit:                    commit,
-		commitMessage:             commitMessage,
+		commit:                    args.commit,
+		commitMessage:             args.commitMessage,
 		commitsToBeam:             commitsToBeam,
 		config:                    validatedConfig,
 		connector:                 connector,
-		detached:                  detached,
+		detached:                  args.detached,
 		hasOpenChanges:            repoStatus.OpenChanges,
 		initialBranch:             initialBranch,
 		initialBranchInfo:         initialBranchInfo,
@@ -382,8 +389,8 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 		nonExistingBranches:       nonExistingBranches,
 		preFetchBranchInfos:       preFetchBranchSnapshot.Branches,
 		previousBranch:            previousBranch,
-		propose:                   propose,
-		prototype:                 prototype,
+		propose:                   args.propose,
+		prototype:                 args.prototype,
 		remotes:                   remotes,
 		stashSize:                 stashSize,
 		targetBranch:              targetBranch,
@@ -391,7 +398,18 @@ func determineHackData(args []string, repo execute.OpenRepoResult, cliConfig cli
 	return data, false, err
 }
 
-func convertToFeatureBranch(args convertToFeatureBranchArgs) error {
+type hackArgs struct {
+	argv          []string
+	beam          configdomain.Beam
+	cliConfig     configdomain.PartialConfig
+	commit        configdomain.Commit
+	commitMessage Option[gitdomain.CommitMessage]
+	detached      configdomain.Detached
+	propose       configdomain.Propose
+	prototype     configdomain.Prototype
+}
+
+func convertToFeatureBranch(repo execute.OpenRepoResult, args convertToFeatureBranchArgs) error {
 	for branchName, branchType := range args.makeFeatureData.targetBranches {
 		switch branchType {
 		case
@@ -399,7 +417,7 @@ func convertToFeatureBranch(args convertToFeatureBranchArgs) error {
 			configdomain.BranchTypeObservedBranch,
 			configdomain.BranchTypeParkedBranch,
 			configdomain.BranchTypePrototypeBranch:
-			if err := gitconfig.SetBranchTypeOverride(args.repo.Backend, configdomain.BranchTypeFeatureBranch, branchName); err != nil {
+			if err := gitconfig.SetBranchTypeOverride(repo.Backend, configdomain.BranchTypeFeatureBranch, branchName); err != nil {
 				return err
 			}
 		case configdomain.BranchTypeFeatureBranch:
@@ -412,14 +430,14 @@ func convertToFeatureBranch(args convertToFeatureBranchArgs) error {
 		fmt.Printf(messages.BranchIsNowFeature, branchName)
 	}
 	return configinterpreter.Finished(configinterpreter.FinishedArgs{
-		Backend:               args.repo.Backend,
+		Backend:               repo.Backend,
 		BeginBranchesSnapshot: None[gitdomain.BranchesSnapshot](),
 		BeginConfigSnapshot:   args.beginConfigSnapshot,
 		Command:               "observe",
-		CommandsCounter:       args.repo.CommandsCounter,
-		FinalMessages:         args.repo.FinalMessages,
-		Git:                   args.repo.Git,
-		RootDir:               args.rootDir,
+		CommandsCounter:       repo.CommandsCounter,
+		FinalMessages:         repo.FinalMessages,
+		Git:                   repo.Git,
+		RootDir:               repo.RootDir,
 		TouchedBranches:       args.makeFeatureData.targetBranches.Keys().BranchNames(),
 		Verbose:               args.verbose,
 	})
@@ -429,7 +447,5 @@ type convertToFeatureBranchArgs struct {
 	beginConfigSnapshot undoconfig.ConfigSnapshot
 	config              config.ValidatedConfig
 	makeFeatureData     convertToFeatureData
-	repo                execute.OpenRepoResult
-	rootDir             gitdomain.RepoRootDir
 	verbose             configdomain.Verbose
 }
