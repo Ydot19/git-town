@@ -1,9 +1,11 @@
-package opcodes
+package opcodes_test
 
 import (
 	"testing"
 
 	"github.com/shoenig/test/must"
+
+	"github.com/git-town/git-town/v21/internal/vm/opcodes"
 )
 
 func TestUpdateBodyWithLineage(t *testing.T) {
@@ -72,12 +74,13 @@ func TestUpdateBodyWithLineage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := updateProposalBodyWithStackLineage(tt.currentBody, tt.lineageContent)
+			t.Parallel()
+			result := opcodes.UpdateProposalBodyWithStackLineage(tt.currentBody, tt.lineageContent)
 			must.EqOp(t, tt.expected, result)
 
 			// Test idempotency - running again should produce the same result
 			if tt.name == "multiple runs produce same result (idempotent)" {
-				secondRun := updateProposalBodyWithStackLineage(result, tt.lineageContent)
+				secondRun := opcodes.UpdateProposalBodyWithStackLineage(result, tt.lineageContent)
 				must.EqOp(t, result, secondRun)
 			}
 		})

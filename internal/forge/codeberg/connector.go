@@ -211,7 +211,7 @@ func (self Connector) updateProposalBody(proposalData forgedomain.ProposalInterf
 	data := proposalData.Data()
 	self.log.Start(messages.APIUpdateProposalBody, colors.BoldGreen().Styled("#"+strconv.Itoa(data.Number)))
 	_, _, err := self.client.EditPullRequest(self.Organization, self.Repository, int64(data.Number), forgejo.EditPullRequestOption{
-		Body: data.Body.GetOrDefault(),
+		Body: updatedBody,
 	})
 	if err != nil {
 		self.log.Failed(err.Error())

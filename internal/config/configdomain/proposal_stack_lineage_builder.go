@@ -14,7 +14,7 @@ type ProposalStackLineageBuilder interface {
 	// Adds the next branch in the lineage chain
 	AddBranch(childBranch gitdomain.LocalBranchName, parentBranch Option[gitdomain.LocalBranchName]) (ProposalStackLineageBuilder, error)
 	// Build - creates the proposal lineage based on the display location
-	Build(cfgs ...configureProposalStackLineage) Option[string]
+	Build(cfgs ...ConfigureProposalStackLineage) Option[string]
 	// GetProposal fetches the proposal data for a branch, if there is one.
 	GetProposal(branch gitdomain.LocalBranchName) Option[forgedomain.ProposalData]
 }
@@ -22,13 +22,8 @@ type ProposalStackLineageBuilder interface {
 // NewProposalStackLineageBuilder enables generating the proposal stack lineage under daferent contexts
 // connector - forgedomain.Connector
 // exemptBranches - the branches we do not care to fetch proposal data.
-func NewProposalStackLineageBuilder(connector forgedomain.Connector, exemptBranches ...gitdomain.LocalBranchName) ProposalStackLineageBuilder {
-	if _, hasFindProposal := connector.FindProposalFn().Get(); !hasFindProposal {
-		// If there is no way to find proposals, use a no-op builder
-		return &noopProposalStackLineageBuilder{}
-	}
-
-	return &proposalStackLineageBuilder{
+func NewProposalStackLineageBuilder(connector forgedomain.Connector, exemptBranches ...gitdomain.LocalBranchName) *ProposalStackLineageBuilderImpl {
+	return &ProposalStackLineageBuilderImpl{
 		branchesExemptFromDisplayingProposalInfo: exemptBranches,
 		connector:                                connector,
 		orderedLineage:                           make([]*proposalLineage, 0),
@@ -40,13 +35,13 @@ type proposalLineage struct {
 	proposal Option[forgedomain.ProposalData]
 }
 
-type proposalStackLineageBuilder struct {
+type ProposalStackLineageBuilderImpl struct {
 	branchesExemptFromDisplayingProposalInfo gitdomain.LocalBranchNames
 	connector                                forgedomain.Connector
 	orderedLineage                           []*proposalLineage
 }
 
-func (self *proposalStackLineageBuilder) AddBranch(childBranch gitdomain.LocalBranchName, parentBranch Option[gitdomain.LocalBranchName]) (ProposalStackLineageBuilder, error) {
+func (self *ProposalStackLineageBuilderImpl) AddBranch(childBranch gitdomain.LocalBranchName, parentBranch Option[gitdomain.LocalBranchName]) (*ProposalStackLineageBuilderImpl, error) {
 	if self.branchesExemptFromDisplayingProposalInfo.Contains(childBranch) || parentBranch.IsNone() {
 		self.orderedLineage = append(self.orderedLineage, &proposalLineage{
 			branch:   childBranch,
@@ -75,7 +70,7 @@ func (self *proposalStackLineageBuilder) AddBranch(childBranch gitdomain.LocalBr
 	return self, nil
 }
 
-func (self *proposalStackLineageBuilder) Build(cfgs ...configureProposalStackLineage) Option[string] {
+func (self *ProposalStackLineageBuilderImpl) Build(cfgs ...ConfigureProposalStackLineage) Option[string] {
 	builderOptions := newProposalStackLineageBuilderOptions()
 	for _, cfg := range cfgs {
 		cfg(builderOptions)
@@ -110,7 +105,7 @@ func (self *proposalStackLineageBuilder) Build(cfgs ...configureProposalStackLin
 	return Some(builder.String())
 }
 
-func (self *proposalStackLineageBuilder) GetProposal(branch gitdomain.LocalBranchName) Option[forgedomain.ProposalData] {
+func (self *ProposalStackLineageBuilderImpl) GetProposal(branch gitdomain.LocalBranchName) Option[forgedomain.ProposalData] {
 	response := None[forgedomain.ProposalData]()
 	for _, curr := range self.orderedLineage {
 		if curr.branch == branch {
@@ -126,10 +121,10 @@ func formattedDisplay(builderOptions *proposalStackLineageBuildOptions, currentI
 			return colors.Green().Styled(fmt.Sprintf("%s%s %s PR #%d %s (%s)\n", builderOptions.currentBranchIndicator, currentIndentLevel, builderOptions.indentMarker, proposalData.Number, proposalData.Title, proposalData.URL))
 		}
 		return fmt.Sprintf("%s %s PR #%d %s (%s)\n", currentIndentLevel, builderOptions.indentMarker, proposalData.Number, proposalData.Title, proposalData.URL)
-	} else {
-		if builderOptions.currentBranch.GetOrDefault() == proposalData.Source {
-			return fmt.Sprintf("%s %s PR %s %s\n", currentIndentLevel, builderOptions.indentMarker, proposalData.URL, builderOptions.currentBranchIndicator)
-		}
-		return fmt.Sprintf("%s %s PR %s\n", currentIndentLevel, builderOptions.indentMarker, proposalData.URL)
 	}
+
+	if builderOptions.currentBranch.GetOrDefault() == proposalData.Source {
+		return fmt.Sprintf("%s %s PR %s %s\n", currentIndentLevel, builderOptions.indentMarker, proposalData.URL, builderOptions.currentBranchIndicator)
+	}
+	return fmt.Sprintf("%s %s PR %s\n", currentIndentLevel, builderOptions.indentMarker, proposalData.URL)
 }

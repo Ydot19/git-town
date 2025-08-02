@@ -70,7 +70,7 @@ func branchCmd() *cobra.Command {
 }
 
 func executeBranch(cliConfig cliconfig.CliConfig, proposal configdomain.Proposal) error {
-	if proposal {
+	if proposal.IsTrue() {
 		return executeProposalDisplay(cliConfig)
 	}
 

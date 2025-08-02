@@ -143,7 +143,7 @@ func executeSync(cliConfig cliconfig.CliConfig, syncAllBranches configdomain.All
 		runProgram.Value.Add(&opcodes.PushTags{})
 	}
 
-	if proposal {
+	if proposal.IsTrue() {
 		runProgram.Value.Add(&opcodes.ProposalLineageCreate{
 			Branch:            data.initialBranch,
 			ProposalLineageIn: configdomain.ProposalLineageOperationInProposalBody,

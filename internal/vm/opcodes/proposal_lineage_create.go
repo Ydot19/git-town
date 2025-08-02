@@ -27,7 +27,11 @@ func (self *ProposalLineageCreate) Run(args shared.RunArgs) error {
 	lineageInformation := args.Config.Value.NormalConfig.Lineage.BranchLineage(self.Branch)
 	for _, curr := range lineageInformation {
 		currParent := args.Config.Value.NormalConfig.Lineage.Parent(curr)
-		builder.AddBranch(curr, currParent)
+		var err error
+		builder, err = builder.AddBranch(curr, currParent)
+		if err != nil {
+			return err
+		}
 	}
 
 	switch self.ProposalLineageIn {
@@ -74,19 +78,21 @@ func (self *ProposalLineageCreate) Run(args shared.RunArgs) error {
 		lineageString := stackLineage.GetOrDefault()
 
 		// Update body with lineage using our marker-based approach
-		updatedBody := updateProposalBodyWithStackLineage(currentBody, lineageString)
+		updatedBody := UpdateProposalBodyWithStackLineage(currentBody, lineageString)
 
 		op := &ProposalUpdateBody{
 			Proposal:    proposalDataUnwrapped,
 			UpdatedBody: Some(updatedBody),
 		}
 		return op.Run(args)
-	default:
+	case configdomain.ProposalLineageInNone:
 		return nil
 	}
+
+	return nil
 }
 
-func updateProposalBodyWithStackLineage(currentBody, lineageContent string) string {
+func UpdateProposalBodyWithStackLineage(currentBody, lineageContent string) string {
 	startMarker := "<!-- branch-stack -->"
 	endMarker := "<!-- branch-stack-end -->"
 
